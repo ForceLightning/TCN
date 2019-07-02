@@ -45,6 +45,19 @@ class TemporalBlock(nn.Module):
         return self.relu(out + res)
 
 
+class TemporalSkipBlock(TemporalBlock):
+    def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2):
+        super().__init__(n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=dropout)
+        self.downsample = nn.Conv1d(n_inputs, n_outputs, 1)
+
+    def init_weights(self):
+        return super().init_weights()
+
+    def forward(self, x):
+        out = self.net(x)
+        res = self.downsample(x)
+        return self.relu(out + res)
+
 class TemporalConvNet(nn.Module):
     def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2):
         super(TemporalConvNet, self).__init__()
@@ -64,19 +77,26 @@ class TemporalConvNet(nn.Module):
 
 
 class TCN_DimensionalityReduced(nn.Module):
-    def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2):
+    def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2, use_skip_connections=False):
         super(TCN_DimensionalityReduced, self).__init__()
+        self.use_skip_connections = use_skip_connections
         layers = []
         num_levels = len(num_channels)
+        self.d_reduce = nn.Conv1d(num_inputs, num_channels[0], kernel_size=1)
         for i in range(num_levels):
             dilation_size = 2 ** i
-            in_channels = num_inputs if i == 0 else num_channels[i-1]
+            in_channels = num_channels[i-1]
             out_channels = num_channels[i]
-            kernel_size = kernel_size if i != 0 else 1
-            layers += [TemporalBlock(in_channels, out_channels, kernel_size, stride=1, dilation=dilation_size,
-                                     padding=(kernel_size-1) * dilation_size, dropout=dropout)]
+            print(TemporalSkipBlock)
+            layers += [TemporalSkipBlock(in_channels, out_channels, kernel_size, stride=1, dilation=dilation_size,
+                                         padding=(kernel_size-1) * dilation_size, dropout=dropout)]
 
         self.network = nn.Sequential(*layers)
 
     def forward(self, x):
+        if self.use_skip_connections:
+            for tb in [m for m in self.network.modules()][2].children():
+                skips = [layer for layer in tb.children()][-1]
+                self.network(x).add_(skips)
+        x = self.d_reduce(x)
         return self.network(x)
