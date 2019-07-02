@@ -63,7 +63,7 @@ class TemporalConvNet(nn.Module):
         return self.network(x)
 
 
-class TCN_DimensionalityReduced(nn.module):
+class TCN_DimensionalityReduced(nn.Module):
     def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2):
         super(TCN_DimensionalityReduced, self).__init__()
         layers = []
