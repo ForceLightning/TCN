@@ -77,20 +77,20 @@ class TemporalConvNet(nn.Module):
 
 
 class TCN_DimensionalityReduced(nn.Module):
-    def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2, use_skip_connections=False):
+    def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2, use_skip_connections=False, reduce_dimensionality=True):
         super(TCN_DimensionalityReduced, self).__init__()
         self.use_skip_connections = use_skip_connections
         layers = []
         num_levels = len(num_channels)
-        self.d_reduce = nn.Conv1d(num_inputs, num_channels[0], kernel_size=1)
+        self.reduce_dimensionality = reduce_dimensionality
+        if self.reduce_dimensionality:
+            self.d_reduce = nn.Conv1d(num_inputs, num_channels[0], kernel_size=1)
         for i in range(num_levels):
             dilation_size = 2 ** i
-            in_channels = num_channels[i-1]
+            in_channels = num_channels[i-1] if (self.reduce_dimensionality or i!=0) else num_inputs
             out_channels = num_channels[i]
-            print(TemporalSkipBlock)
             layers += [TemporalSkipBlock(in_channels, out_channels, kernel_size, stride=1, dilation=dilation_size,
                                          padding=(kernel_size-1) * dilation_size, dropout=dropout)]
-
         self.network = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -98,5 +98,6 @@ class TCN_DimensionalityReduced(nn.Module):
             for tb in [m for m in self.network.modules()][2].children():
                 skips = [layer for layer in tb.children()][-1]
                 self.network(x).add_(skips)
-        x = self.d_reduce(x)
+        if self.reduce_dimensionality:
+            x = self.d_reduce(x)
         return self.network(x)
