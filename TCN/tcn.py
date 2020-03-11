@@ -46,17 +46,24 @@ class TemporalBlock(nn.Module):
 
 
 class TemporalSkipBlock(TemporalBlock):
-    def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2):
+    def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2, use_skips=False):
         super().__init__(n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=dropout)
+        self.use_skips = use_skips
         self.downsample = nn.Conv1d(n_inputs, n_outputs, 1)
 
     def init_weights(self):
-        return super().init_weights()
+        super().init_weights()
 
     def forward(self, x):
-        out = self.net(x)
-        res = self.downsample(x)
-        return self.relu(out + res)
+        if type(x) == tuple and self.use_skips:
+            x, skip = x[0], x[1]
+            out = self.net(x)
+            res = self.downsample(x)
+            return (self.relu(out + res), skip + res)
+        else:
+            out = self.net(x)
+            res = self.downsample(x)
+            return self.relu(out + res)
 
 class TemporalConvNet(nn.Module):
     def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2):
@@ -90,14 +97,17 @@ class TCN_DimensionalityReduced(nn.Module):
             in_channels = num_channels[i-1] if (self.reduce_dimensionality or i!=0) else num_inputs
             out_channels = num_channels[i]
             layers += [TemporalSkipBlock(in_channels, out_channels, kernel_size, stride=1, dilation=dilation_size,
-                                         padding=(kernel_size-1) * dilation_size, dropout=dropout)]
+                                         padding=(kernel_size-1) * dilation_size, dropout=dropout, use_skips=use_skip_connections)]
         self.network = nn.Sequential(*layers)
 
     def forward(self, x):
-        if self.use_skip_connections:
-            for tb in [m for m in self.network.modules()][2].children():
-                skips = [layer for layer in tb.children()][-1]
-                self.network(x).add_(skips)
+        x = x.to(self.network[0].net[0].weight.dtype)
         if self.reduce_dimensionality:
             x = self.d_reduce(x)
-        return self.network(x)
+            x = self.network(x)
+        if self.use_skip_connections:
+            x = self.network(x)
+            if type(x) == tuple:
+                x, skip = x[0]. x[1]
+                x += skip
+        return x
