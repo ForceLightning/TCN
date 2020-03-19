@@ -54,12 +54,28 @@ class TemporalSkipBlock(TemporalBlock):
     def init_weights(self):
         super().init_weights()
 
+    # def forward(self, x):
+    #     if type(x) == tuple and self.use_skips:
+    #         x, skip = x[0], x[1]
+    #         out = self.net(x)
+    #         res = self.downsample(x)
+    #         return (self.relu(out + res), skip + res)
+    #     else:
+    #         out = self.net(x)
+    #         res = self.downsample(x)
+    #         return self.relu(out + res)
+
     def forward(self, x):
-        if type(x) == tuple and self.use_skips:
-            x, skip = x[0], x[1]
-            out = self.net(x)
-            res = self.downsample(x)
-            return (self.relu(out + res), skip + res)
+        if self.use_skips:
+            if type(x) == tuple:
+                x, skip = x[0], x[1]
+                out = self.net(x)
+                res = self.downsample(x)
+                return (self.relu(out + res), skip + res)
+            else:
+                out = self.net(x)
+                res = self.downsample(x)
+                return (self.relu(out + res), res)
         else:
             out = self.net(x)
             res = self.downsample(x)
@@ -108,6 +124,6 @@ class TCN_DimensionalityReduced(nn.Module):
         if self.use_skip_connections:
             x = self.network(x)
             if type(x) == tuple:
-                x, skip = x[0]. x[1]
+                x, skip = x[0], x[1]
                 x += skip
         return x
